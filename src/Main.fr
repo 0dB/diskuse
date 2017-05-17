@@ -1,0 +1,122 @@
+module fregegoodness.DiskUse where
+
+-- This new version uses a zipper and restricts sorts to each level (where the first version sorted over all entries).
+-- It is much, much faster now, the net sort taking 2 seconds for my MacBook which has a 128G drive (and the output
+-- produced by ```du -x```).  The whole process (including writing to disk) takes about 3.5s.
+
+-- The zipper and the sorting process is written especially for the data from "du -x" [data comes in a certain order;
+-- the total of a directory follows the subdirectories; we don’t navigate the tree except for adding new folders) and
+-- first has to reverse the output of ```du```.  The zipper always conses new nodes to the beginning of the existing
+-- folder list (whereas a zipper usually allows to focus on items in the middle of the list as well, and remembers the
+-- “hole” there, too).
+
+import Data.List(sortBy)
+
+type Size = Int
+type Path = [String]
+type Node = (Path, Size)
+
+data Folder = Folder Node [Folder]
+type Crumb = Folder                -- Breadcrumb is the parent folder with a list of folders but always only with the
+                                   -- first item missing (the “hole”), so there is no *visible* hole in this data
+                                   -- structure.
+type Zipper = (Folder, [Crumb])
+
+-- Could not make Zipper instance of Show!? But can show zipper z like this: show (z :: Zipper).
+
+-- zipper
+
+-- Add new folder to parent *and* change focus to that new folder (used inside ```addNodeToZipper```)
+
+addFolder :: Folder -> Zipper -> Zipper
+addFolder f (parent, cs) = (f, parent:cs) -- the “hole” is just the fact that the new folder isn’t in the parent (yet);
+                                          -- it is at the beginning of the folders list of the parent
+
+goUp :: Zipper -> Zipper
+goUp (f, []) = (Folder (["SOMETHING WENT WRONG"], 0) [], []) -- why introduce ```Maybe``` for a case I don’t expect to
+                                                             -- get…
+goUp (f, Folder n fs:cs) = (Folder n (f:fs), cs) -- new folders are always consed to front (we only go up after having
+                                                 -- added a new folder)
+
+goUpN :: Int -> Zipper -> Zipper
+goUpN n z = head $ drop n $ iterate goUp z
+
+goTop :: Zipper -> Zipper
+goTop (f, []) = (f, [])
+goTop (f, c:cs) = goTop $ goUp (f, c:cs)
+
+addNodeToZipper :: Zipper -> Node -> Zipper
+addNodeToZipper z node = addFolder (Folder node []) (goUpN n z) -- Folder starts out with empty list of subfolders
+    where n                   = zipperDepth z - nodeDepth node + 2
+          zipperDepth (f, cs) = length cs
+          nodeDepth (path, _) = length path
+
+-- ```flatten``` is copied from Data.Tree.  I decided against trying to write such a function myself.  After trying to
+-- exactly understand this function for about 20 minutes, that seems to be a good idea :-)
+
+flatten :: Folder -> [Node]
+flatten t = squish t [] -- [] is initial list of nodes (empty)
+  where squish (Folder n fs) ns = n:foldr squish ns fs
+
+startingZipper :: Node -> Zipper
+startingZipper n = (Folder n [], [])
+
+getCurrentFolder = (\(f, _) -> f)
+
+-- sorting
+
+compareFolderSize :: Folder -> Folder -> Ordering
+compareFolderSize = (\(Folder (_, s1) _) (Folder (_, s2) _) -> s2 <=> s1) -- high to low
+
+sortSubFolders :: Folder -> Folder
+sortSubFolders = (\(Folder n fs) -> Folder n (sortFolders fs))
+
+sortFolders :: [Folder] -> [Folder]
+sortFolders [] = []
+sortFolders fs = sortBy compareFolderSize (map sortSubFolders fs)
+
+sortZipper :: Zipper -> Zipper
+sortZipper (f, cs) = (sortSubFolders f, cs)
+
+-- for reading data from file
+
+splitFileIntoLines :: String -> [String]
+splitFileIntoLines = ´\n´.splitted
+
+parseDu :: String -> [Maybe String]
+parseDu = (=~~ ´([0-9]+)\t\.(.*)´)
+
+getParts :: [Maybe String] -> Maybe (String, String)
+getParts parsed = do
+  let (path, size) = case parsed of
+                       [_, size, path] -> (path, size)
+                       otherwise       -> (Nothing, Nothing)
+  size <- size
+  path <- path
+  return (path, size) -- this is silly.  I don’t think I need these last three lines, can just return the (path, size) or Nothing above
+
+createNode :: Maybe (String, String) -> Node
+createNode (Just (path, size)) = (´/´.splitted path, atoi size)
+createNode Nothing = ([""], 0) -- or should I use Nothing and handle this case where ```show``` happens?
+
+-- for outputting
+
+showNode :: Node -> String
+showNode (ss, size) = ("%,11d".format size :: String) ++ "\t" ++
+                      (fold (\acc y -> acc ++ y ++ "/") "" ss) ++ "\n"
+
+showNodes :: [Node] -> String
+showNodes ns = fold (++) "" $ map showNode ns
+
+-- usage: run 'sudo du -x > du.txt' and then run main (```-x``` so as not to follow links)
+
+-- TODO: see whether I should use foldr instead of fold for addNodeToZipper
+
+main :: IO ()
+main = do
+    fileContent <- readFile "/Users/norman/Desktop/du4.out"
+    -- ATTN: the ```reverse``` is important, otherwise the algorithm will fail
+    let nodes = map (createNode . getParts . parseDu) $ reverse $ splitFileIntoLines fileContent
+        zipperFromNodes = fold addNodeToZipper (startingZipper (head nodes)) (tail nodes)
+        rootFolder = getCurrentFolder $ sortZipper $ goTop $ zipperFromNodes
+    writeFile "nodes.txt" $ showNodes $ flatten $ rootFolder
