@@ -42,7 +42,7 @@ dropFirstLineIfBad ns = ns
 -- speed of version without `reverse` seems to be about the same:
 -- mnodes = sequence $ dropWhile isNothing $ foldl (\acc line -> (lineToNode line) : acc) Nil $ splitFileIntoLines input
 
-main :: Eff ( fs :: FS, err :: EXCEPTION, console :: CONSOLE ) Unit
+main :: Eff ( fs :: FS, exception :: EXCEPTION, console :: CONSOLE ) Unit
 main = do
   input <- readTextFile UTF8 "du.txt"
 
