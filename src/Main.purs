@@ -8,12 +8,11 @@ module Main where
 
 import Prelude (Unit, bind, map, (<<<), (>>=))
 
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (CONSOLE, log)
-import Control.Monad.Eff.Exception (EXCEPTION)
-import Node.FS (FS)
 import Node.FS.Sync (readTextFile)
 import Node.Encoding (Encoding(UTF8))
+
+import Effect (Effect)
+import Effect.Console (log)
 
 import Data.List (List, reverse, (:))
 import Data.Traversable (sequence, foldl)
@@ -42,7 +41,7 @@ dropFirstLineIfBad ns = ns
 -- speed of version without `reverse` seems to be about the same:
 -- mnodes = sequence $ dropWhile isNothing $ foldl (\acc line -> (lineToNode line) : acc) Nil $ splitFileIntoLines input
 
-main :: Eff ( fs :: FS, exception :: EXCEPTION, console :: CONSOLE ) Unit
+main :: Effect Unit
 main = do
   input <- readTextFile UTF8 "du.txt"
 

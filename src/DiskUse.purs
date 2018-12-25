@@ -16,6 +16,7 @@ import Data.String.Regex as R
 import Data.String.Regex.Flags as RF
 import Data.Either (Either(..))
 import Data.Int (fromString)
+import Data.Array.NonEmpty (toArray)
 
 import Folder (Node(Node), Size(Size), Unit(G, M, K, B), Suffix(Suffix))
 
@@ -78,8 +79,10 @@ lineToNode line = validateRe re >>= parseLine >>= validatePath >>= makeSize >>=
 
                         parseLine :: R.Regex -> ESP
                         parseLine pattern = case R.match pattern line of
-                                              Just [_, Just p, Just s, Just u, Just path] -> Right { p, s, u, path, size : dummySize }
-                                              otherwise                                   -> Left ("Line \"" <> line <> "\" did not match regex!")
+                                              Just a    -> case (toArray a) of
+                                                          [_, Just p, Just s, Just u, Just path] -> Right { p, s, u, path, size : dummySize }
+                                                          otherwise -> Left ("Error!")
+                                              otherwise -> Left ("Line \"" <> line <> "\" did not match regex!")
 
                         validatePath :: ParsedLine -> ESP
                         validatePath parsed@{ path } = case path of
