@@ -79,10 +79,8 @@ lineToNode line = validateRe re >>= parseLine >>= validatePath >>= makeSize >>=
 
                         parseLine :: R.Regex -> ESP
                         parseLine pattern = case R.match pattern line of
-                                              Just a    -> case (toArray a) of
-                                                          [_, Just p, Just s, Just u, Just path] -> Right { p, s, u, path, size : dummySize }
-                                                          otherwise -> Left ("Error!")
-                                              otherwise -> Left ("Line \"" <> line <> "\" did not match regex!")
+                                              Just a | [_, Just p, Just s, Just u, Just path] <- toArray a -> Right { p, s, u, path, size : dummySize }
+                                              otherwise                                                    -> Left ("Line \"" <> line <> "\" did not match regex!")
 
                         validatePath :: ParsedLine -> ESP
                         validatePath parsed@{ path } = case path of
