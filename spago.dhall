@@ -5,6 +5,7 @@ You can edit this file as you like.
 { name = "diskuse"
 , dependencies =
   [ "arrays"
+  , "assert"
   , "console"
   , "effect"
   , "exceptions"
