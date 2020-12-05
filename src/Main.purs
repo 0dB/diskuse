@@ -1,4 +1,4 @@
-module Main where
+module Main (go) where
 
 -- The zipper and the sorting process is written especially for the data from "du -x -h" [data comes in a certain order;
 -- the total of a directory follows the subdirectories; we don’t navigate the tree except for adding new folders) and
@@ -41,21 +41,23 @@ dropFirstLineIfBad ns = ns
 -- speed of version without `reverse` seems to be about the same:
 -- mnodes = sequence $ dropWhile isNothing $ foldl (\acc line -> (lineToNode line) : acc) Nil $ splitFileIntoLines input
 
+go :: String -> Either String String
+go input = validateInput input >>= linesToNodes >>= nodesToRootFolder >>= Right <<< showRootFolder
+             where validateInput :: String -> Either String String
+                   validateInput i = case i of
+                                       ""        -> Left "Input file is empty!"
+                                       otherwise -> Right i
+                   linesToNodes :: String -> Either String (List Node)
+                   linesToNodes = sequence <<< dropFirstLineIfBad <<< reverse <<< map lineToNode <<< splitFileIntoLines
+                   nodesToRootFolder :: List Node -> Either String Folder
+                   nodesToRootFolder = getCurrentFolder <<< goTop <<< foldl addFolderToZipper EmptyZipper <<< map nodeToFolder
+                   showRootFolder :: Folder -> String
+                   showRootFolder = showListNode <<< flatten <<< sortSubFolders
+
 main :: Effect Unit
 main = do
   input <- readTextFile UTF8 "du.txt"
 
-  let result = validateInput input >>= linesToNodes >>= nodesToRootFolder >>= Right <<< showRootFolder
+  let result = go input
 
   either log log result
-  
-  where validateInput :: String -> Either String String
-        validateInput i = case i of
-                            ""        -> Left "Input file is empty!"
-                            otherwise -> Right i
-        linesToNodes :: String -> Either String (List Node)
-        linesToNodes = sequence <<< dropFirstLineIfBad <<< reverse <<< map lineToNode <<< splitFileIntoLines
-        nodesToRootFolder :: List Node -> Either String Folder
-        nodesToRootFolder = getCurrentFolder <<< goTop <<< foldl addFolderToZipper EmptyZipper <<< map nodeToFolder
-        showRootFolder :: Folder -> String
-        showRootFolder = showListNode <<< flatten <<< sortSubFolders
