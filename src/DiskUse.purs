@@ -77,11 +77,14 @@ lineToNode line = validateRe re >>= parseLine >>= validatePath >>= makeSize >>=
                         validateRe :: String -> Either String R.Regex
                         validateRe r = R.regex r RF.noFlags
 
+                        -- 2020-12 Updated to PS 0.13. `match` now returns NonEmptyArray. Cannot pattern match on that,
+                        -- since it is a type and not a constructor. Could code be more elegant than this? Could not
+                        -- find examples of how other people solve this.
+
                         parseLine :: R.Regex -> ESP
                         parseLine pattern = case R.match pattern line of
                                               Just x | [_, Just p, Just s, Just u, Just path] <- toArray x -> Right { p, s, u, path, size : dummySize }
-                                                     | true                                                -> Left ("Line did not match.")
-                                              otherwise                                   -> Left ("Line \"" <> line <> "\" did not match regex!")
+                                              otherwise                                                    -> Left ("Line \"" <> line <> "\" did not match regex!")
 
                         validatePath :: ParsedLine -> ESP
                         validatePath parsed@{ path } = case path of
